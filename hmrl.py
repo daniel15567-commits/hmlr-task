@@ -46,3 +46,27 @@ def configure_tesseract(path=None):
         "Or set:\n"
         '  setx TESSERACT_CMD "C:\\Program Files\\Tesseract-OCR\\tesseract.exe"'
     )
+
+def extract_text_layers(pdf_path):
+    with pdfplumber.open(pdf_path) as pdf:
+        return [page.extract_text() or "" for page in pdf.pages]
+
+
+def is_good_text(text):
+    text = (text or "").strip()
+    if len(text) < 40 or "(cid:" in text:
+        return False
+    letters = sum(ch.isalpha() for ch in text)
+    return letters / max(len(text), 1) >= 0.12
+
+def ocr_page(page, zoom=2.0):
+    if not HAS_TESS:
+        raise RuntimeError(
+            "OCR was requested but pytesseract is not installed.\n"
+            "Run: pip install pytesseract"
+        )
+
+    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
+    img = Image.open(io.BytesIO(pix.tobytes("png")))
+    return pytesseract.image_to_string(img, config="--oem 3 --psm 6")
+
