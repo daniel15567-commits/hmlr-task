@@ -70,3 +70,21 @@ def ocr_page(page, zoom=2.0):
     img = Image.open(io.BytesIO(pix.tobytes("png")))
     return pytesseract.image_to_string(img, config="--oem 3 --psm 6")
 
+
+def get_page_text(page, text_layer, zoom=2.0, force_ocr=False):
+    clean = (text_layer or "").strip()
+    if not force_ocr and is_good_text(clean):
+        return clean
+    return ocr_page(page, zoom)
+
+def block_after_label(text, labels):
+    for label in labels:
+        match = re.search(
+            rf"(?is)\b{label}\s*[:\-]\s*(.*?)(?:\n\s*\n|\n[A-Z][A-Za-z0-9 /&()'.,-]{{2,}}\s*[:\-]|$)",
+            text,
+        )
+        if match:
+            value = match.group(1).strip()
+            value = re.sub(r"[ \t]+", " ", value)
+            return re.sub(r"\n[ \t]+", "\n", value).strip()
+    return None
