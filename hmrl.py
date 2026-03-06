@@ -88,3 +88,56 @@ def block_after_label(text, labels):
             value = re.sub(r"[ \t]+", " ", value)
             return re.sub(r"\n[ \t]+", "\n", value).strip()
     return None
+
+def line_for_match(text, start, end):
+    left = text.rfind("\n", 0, start) + 1
+    right = text.find("\n", end)
+    if right == -1:
+        right = len(text)
+    return text[left:right]
+
+
+def find_application_numbers(text):
+    norm = text.replace("\r\n", "\n").replace("\r", "\n")
+    norm = re.sub(r"[ \t]+", " ", norm)
+
+    hits = set()
+
+    patterns = [
+        (
+            r"(?i)\bApplication\s*(?:Number|No\.?|Ref(?:erence)?)\s*[:\-]?\s*([A-Za-z0-9\/\-]{5,})",
+            1,
+        ),
+        (
+            r"(?i)\bApplication\s*(?:No\.?|Number)\b.*?(\d{2}\/\d{2}\/\d{3,6})",
+            1,
+        ),
+        (
+            r"\b[A-Za-z]{1,2}\/\d{2}\/\d{3,6}\b",
+            0,
+        ),
+    ]
+
+    for pattern, group in patterns:
+        for match in re.finditer(pattern, norm):
+            value = match.group(group).strip().rstrip(".,;:|")
+            hits.add(value)
+
+    cleaned = []
+    for value in hits:
+        if not re.search(r"\d", value):
+            continue
+        if re.fullmatch(r"0\d{3,4}-\d{3,4}", value):
+            continue
+        if re.fullmatch(r"(19|20)\d{2}\/(19|20)\d{2}", value):
+            continue
+
+        idx = norm.find(value)
+        if idx != -1:
+            line = line_for_match(norm, idx, idx + len(value)).lower()
+            if any(key in line for key in ["date of application", "d. of application", "d of application", "date:"]):
+                continue
+
+        cleaned.append(value)
+
+    return sorted(set(cleaned))
