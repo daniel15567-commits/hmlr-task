@@ -141,3 +141,34 @@ def find_application_numbers(text):
         cleaned.append(value)
 
     return sorted(set(cleaned))
+
+
+def looks_like_person_name(text):
+    text = (text or "").strip().strip(",")
+    if len(text) < 3 or len(text) > 80:
+        return False
+
+    low = text.lower()
+    bad_words = [
+        "applicant", "agent", "named", "reverse", "ref", "date", "part",
+        "yours", "faithfully", "sincerely", "council", "office", "notice",
+        "town and country", "planning act", "building regulations",
+    ]
+    if any(word in low for word in bad_words):
+        return False
+
+    if any(ch in text for ch in "()[]{}|"):
+        return False
+
+    if re.search(r"(?i)\b(mr|mrs|ms|miss|dr|prof)\b", text):
+        return True
+
+    tokens = re.findall(r"[A-Za-z]+\.?", text)
+    if not (2 <= len(tokens) <= 5):
+        return False
+
+    if any(len(token.strip(".")) > 15 for token in tokens):
+        return False
+
+    return True
+
