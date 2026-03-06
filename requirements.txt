@@ -1,0 +1,6 @@
+pdfplumber
+PyMuPDF
+Pillow
+pytesseract
+transformers
+torch
