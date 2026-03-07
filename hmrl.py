@@ -301,4 +301,5 @@ def main():
 
     write_outputs(results, args.out)
 
-
+if __name__ == "__main__":
+    main()
