@@ -236,3 +236,33 @@ def looks_like_person_name(text):
         return False
 
     return True
+
+
+def extract_applicant_names(text):
+    norm = text.replace("\r\n", "\n").replace("\r", "\n")
+    norm = re.sub(r"[ \t]+", " ", norm)
+
+    block = block_after_label(norm, [
+        r"Applicant",
+        r"Name of Applicant",
+        r"Applicant Name",
+        r"Applicant\(s\)",
+    ])
+    if block:
+        first_line = block.splitlines()[0].strip().strip(",")
+        if looks_like_person_name(first_line):
+            return [first_line]
+
+    match = re.search(r"(?is)\bApplicant\b.*?\n([^\n]{2,80})", norm)
+    if match:
+        line = match.group(1).strip().strip(",")
+        if looks_like_person_name(line):
+            return [line]
+
+    names = []
+    for match in re.finditer(r"(?i)\bgranted\s+to\s+(.+?)(?:—|-|dated|under|\n)", norm):
+        name = match.group(1).strip(" ,.-")
+        if looks_like_person_name(name):
+            names.append(name)
+
+    return sorted(set(names))
