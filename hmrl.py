@@ -240,5 +240,65 @@ def write_outputs(results, out_dir):
     print(f"Wrote: {jsonl_path}")
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="HMLR challenge: page-type classification + field extraction from PDF."
+    )
+    parser.add_argument("--pdf", required=True, help="Path to the PDF")
+    parser.add_argument("--out", default="out", help="Output folder")
+    parser.add_argument("--zoom", type=float, default=2.0, help="OCR zoom factor")
+    parser.add_argument("--force-ocr", action="store_true", help="Force OCR even if text exists")
+    parser.add_argument("--use-zero-shot", action="store_true", help="Use transformer zero-shot classification")
+    parser.add_argument("--zs-model", default="facebook/bart-large-mnli", help="Zero-shot model name")
+    parser.add_argument("--tesseract", default=None, help="Path to tesseract.exe")
+
+    args = parser.parse_args()
+
+    text_layers = extract_text_layers(args.pdf)
+    needs_ocr = args.force_ocr or any(not is_good_text(text) for text in text_layers)
+
+    if needs_ocr:
+        configure_tesseract(args.tesseract)
+
+    doc = fitz.open(args.pdf) if needs_ocr else None
+
+    try:
+        page_texts = []
+        for i, text_layer in enumerate(text_layers):
+            if doc is None:
+                page_texts.append((text_layer or "").strip())
+            else:
+                page = doc.load_page(i)
+                page_texts.append(get_page_text(page, text_layer, args.zoom, args.force_ocr))
+    finally:
+        if doc is not None:
+            doc.close()
+
+    page_types = [classify_page_heuristic(text) for text in page_texts]
+
+    if args.use_zero_shot:
+        labels = [
+            "decision_notice",
+            "appeal_decision",
+            "conditions_or_reasons",
+            "correspondence_letter",
+            "plan_or_map",
+            "other",
+        ]
+        page_types = classify_pages_zero_shot(page_texts, labels, args.zs_model)
+
+    results = []
+    for i, text in enumerate(page_texts):
+        page_type, confidence = page_types[i]
+        results.append({
+            "page": i + 1,
+            "page_type": page_type,
+            "page_type_confidence": confidence,
+            "application_numbers": find_application_numbers(text),
+            "applicant_names": extract_applicant_names(text),
+            "text_snippet": "\n".join((text or "").splitlines()[:25]).strip(),
+        })
+
+    write_outputs(results, args.out)
 
 
