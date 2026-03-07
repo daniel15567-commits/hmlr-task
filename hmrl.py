@@ -172,3 +172,38 @@ def looks_like_person_name(text):
 
     return True
 
+def classify_page_heuristic(text):
+    text = (text or "").lower()
+    words = re.findall(r"[A-Za-z]{2,}", text)
+    word_count = len(words)
+
+    if "decision notice" in text or "town and country planning act" in text:
+        return "decision_notice", 0.70
+    if "appeal" in text and ("inspectorate" in text or "inspector" in text):
+        return "appeal_decision", 0.65
+    if "condition" in text and ("reason" in text or "conditions" in text):
+        return "conditions_or_reasons", 0.60
+    if word_count < 40:
+        if any(k in text for k in ["scale", "north", "legend", "ordnance survey", "site plan", "location plan"]):
+            return "plan_or_map", 0.60
+        return "low_text_page", 0.55
+    if any(k in text for k in ["dear", "yours sincerely", "yours faithfully"]):
+        return "correspondence_letter", 0.55
+    return "other", 0.40
+
+
+def classify_pages_zero_shot(page_texts, candidate_labels, model_name="facebook/bart-large-mnli"):
+    from transformers import pipeline
+
+    clf = pipeline("zero-shot-classification", model=model_name)
+    results = []
+
+    for text in page_texts:
+        snippet = (text or "")[:2500]
+        if not snippet.strip():
+            results.append(("other", 0.0))
+            continue
+        res = clf(snippet, candidate_labels)
+        results.append((res["labels"][0], float(res["scores"][0])))
+
+    return results
