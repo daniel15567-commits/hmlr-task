@@ -208,61 +208,37 @@ def classify_pages_zero_shot(page_texts, candidate_labels, model_name="facebook/
 
     return results
 
-def looks_like_person_name(text):
-    text = (text or "").strip().strip(",")
-    if len(text) < 3 or len(text) > 80:
-        return False
+def write_outputs(results, out_dir):
+    os.makedirs(out_dir, exist_ok=True)
 
-    low = text.lower()
-    bad_words = [
-        "applicant", "agent", "named", "reverse", "ref", "date", "part",
-        "yours", "faithfully", "sincerely", "council", "office", "notice",
-        "town and country", "planning act", "building regulations",
-    ]
-    if any(word in low for word in bad_words):
-        return False
+    jsonl_path = os.path.join(out_dir, "results.jsonl")
+    txt_path = os.path.join(out_dir, "results.txt")
 
-    if any(ch in text for ch in "()[]{}|"):
-        return False
+    with open(jsonl_path, "w", encoding="utf-8") as f:
+        for row in results:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    if re.search(r"(?i)\b(mr|mrs|ms|miss|dr|prof)\b", text):
-        return True
+    with open(txt_path, "w", encoding="utf-8") as f:
+        for row in results:
+            f.write(f"=== Page {row['page']} ===\n")
+            f.write(f"Page type: {row['page_type']}")
+            if row["page_type_confidence"] is not None:
+                f.write(f" (confidence={row['page_type_confidence']:.2f})")
+            f.write("\n")
+            f.write(f"Application numbers: {', '.join(row['application_numbers']) or 'None'}\n")
+            f.write(f"Applicant names: {', '.join(row['applicant_names']) or 'None'}\n")
+            f.write("Snippet:\n")
+            f.write(row["text_snippet"].strip() + "\n\n")
 
-    tokens = re.findall(r"[A-Za-z]+\.?", text)
-    if not (2 <= len(tokens) <= 5):
-        return False
+    counts = Counter(row["page_type"] for row in results)
 
-    if any(len(token.strip(".")) > 15 for token in tokens):
-        return False
+    print("\nSummary (page_type counts):")
+    for page_type, count in counts.most_common():
+        print(f"  {page_type}: {count}")
 
-    return True
+    print(f"\nWrote: {txt_path}")
+    print(f"Wrote: {jsonl_path}")
 
 
-def extract_applicant_names(text):
-    norm = text.replace("\r\n", "\n").replace("\r", "\n")
-    norm = re.sub(r"[ \t]+", " ", norm)
 
-    block = block_after_label(norm, [
-        r"Applicant",
-        r"Name of Applicant",
-        r"Applicant Name",
-        r"Applicant\(s\)",
-    ])
-    if block:
-        first_line = block.splitlines()[0].strip().strip(",")
-        if looks_like_person_name(first_line):
-            return [first_line]
 
-    match = re.search(r"(?is)\bApplicant\b.*?\n([^\n]{2,80})", norm)
-    if match:
-        line = match.group(1).strip().strip(",")
-        if looks_like_person_name(line):
-            return [line]
-
-    names = []
-    for match in re.finditer(r"(?i)\bgranted\s+to\s+(.+?)(?:—|-|dated|under|\n)", norm):
-        name = match.group(1).strip(" ,.-")
-        if looks_like_person_name(name):
-            names.append(name)
-
-    return sorted(set(names))
